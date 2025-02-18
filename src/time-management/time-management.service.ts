@@ -4,10 +4,11 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { TimeManagement } from './entities/time-management.entity';
 import { ProjectService } from '../project/project.service';
 import { ProjectStatus } from '../project/entities/project.entity';
+import { isTrackingTooShort } from 'src/utils/isTrackingTooShort';
 
 @Injectable()
 export class TimeManagementService {
@@ -17,17 +18,24 @@ export class TimeManagementService {
     private readonly projectService: ProjectService,
   ) {}
 
-  async startTracking({
-    projectId,
-  }: {
-    projectId: number;
-  }): Promise<TimeManagement> {
+  async startTracking({ id }: { id: string }): Promise<TimeManagement> {
+    const projectId = +id;
     const project = await this.projectService.findOne(projectId);
     if (!project) throw new NotFoundException('Project not found');
 
     if (project.status === ProjectStatus.COMPLETED) {
       throw new BadRequestException(
         'Cannot track time for a completed project',
+      );
+    }
+
+    const existingEntry = await this.timeManagementRepository.findOne({
+      where: { project: { id: projectId }, endTime: IsNull() },
+    });
+
+    if (existingEntry) {
+      throw new BadRequestException(
+        'Tracking is already started for this project',
       );
     }
 
@@ -38,19 +46,10 @@ export class TimeManagementService {
       });
     }
 
-    const existingEntry = await this.timeManagementRepository.findOne({
-      where: { project: { id: projectId }, endTime: null },
-    });
-
-    if (existingEntry) {
-      throw new BadRequestException(
-        'Tracking is already started for this project',
-      );
-    }
-
     const newEntry = this.timeManagementRepository.create({
       startTime: new Date(),
       project,
+      endTime: null,
     });
 
     return this.timeManagementRepository.save(newEntry);
@@ -69,7 +68,7 @@ export class TimeManagementService {
     }
 
     const activeEntry = await this.timeManagementRepository.findOne({
-      where: { project: { id: projectId }, endTime: null },
+      where: { project: { id: projectId }, endTime: IsNull() },
     });
 
     if (!activeEntry) {
@@ -78,13 +77,25 @@ export class TimeManagementService {
       );
     }
 
+    if (isTrackingTooShort(activeEntry.startTime)) {
+      await this.timeManagementRepository.remove(activeEntry);
+      throw new BadRequestException('Tracking time is less than 15min');
+    }
+
     activeEntry.endTime = new Date();
 
     return this.timeManagementRepository.save(activeEntry);
   }
 
-  async findAll(): Promise<TimeManagement[]> {
-    return this.timeManagementRepository.find({ relations: ['project'] });
+  async findAll({
+    projectId,
+  }: {
+    projectId: number;
+  }): Promise<TimeManagement[]> {
+    return this.timeManagementRepository.find({
+      where: { project: { id: projectId } },
+      relations: ['project'],
+    });
   }
 
   async findOne(id: number): Promise<TimeManagement> {
