@@ -8,6 +8,8 @@ import { Repository } from 'typeorm';
 import { Project, ProjectStatus } from './entities/project.entity';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
+import { calculateTotalTimeTracked } from 'src/utils/calculateTotalTimeTracked';
+import { TTimeEntrie } from 'src/types/timeEntries';
 
 @Injectable()
 export class ProjectService {
@@ -33,8 +35,15 @@ export class ProjectService {
       where: { id },
       relations: ['timeEntries'],
     });
-    if (!project)
+    if (!project) {
       throw new NotFoundException(`Project with ID ${id} not found`);
+    }
+
+    project['timeEntries'] = undefined;
+    project['timeTracked'] = calculateTotalTimeTracked(
+      project.timeEntries as TTimeEntrie[],
+    );
+
     return project;
   }
 

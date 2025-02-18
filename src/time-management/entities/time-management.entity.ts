@@ -9,7 +9,7 @@ export class TimeManagement {
   @Column({ type: 'timestamp' })
   startTime: Date;
 
-  @Column({ type: 'timestamp' })
+  @Column({ type: 'timestamp', nullable: true })
   endTime: Date;
 
   @ManyToOne(() => Project, (project) => project.timeEntries, {
