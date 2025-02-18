@@ -1,15 +1,22 @@
 import { DataSource } from 'typeorm';
-import { Project } from '../project/entities/project.entity';
-import { TimeManagement } from '../time-management/entities/time-management.entity';
+import { ConfigService } from '@nestjs/config';
+import { config } from 'dotenv';
+config();
 
-export const AppDataSource = new DataSource({
+const configService = new ConfigService();
+
+const AppDataSource = new DataSource({
   type: 'postgres',
-  host: process.env.DATABASE_HOST,
-  port: Number(process.env.DATABASE_PORT),
-  username: process.env.DATABASE_USER,
-  password: process.env.DATABASE_PASS,
-  database: process.env.DATABASE_NAME,
-  entities: [TimeManagement, Project],
+  host: configService.get<string>('DATABASE_HOST'),
+  port: parseInt(configService.get<string>('DATABASE_PORT')),
+  username: configService.get<string>('DATABASE_USER'),
+  password: configService.get<string>('DATABASE_PASS'),
+  database: configService.get<string>('DATABASE_NAME'),
   synchronize: true,
-  migrations: ['src/database/migrations/*.ts'],
+  entities: ['**/*.entity.ts'],
+  migrations: ['src/database/migrations/*-migration.ts'],
+  migrationsRun: false,
+  logging: true,
 });
+
+export default AppDataSource;
